@@ -7,7 +7,12 @@ ts_data$y2 <- dummyts$y * 100
 
 ui <- fillPage(
   fillRow(
-    plotOutput("tsplot", height = "100%", width = "100%"),
+    fillCol(
+      plotOutput("ts0", height = "100%", width = "100%"),
+      plotOutput("ts1", height = "100%", width = "100%", click = "tsclick1"),
+      plotOutput("ts2", height = "100%", width = "100%", click = "tsclick2"),
+      flex = c(2, 7, 3)
+    ),
     height = "90%"
   ),
   fillRow(
@@ -19,7 +24,8 @@ ui <- fillPage(
                 value = range(ts_data$t),
                 width = "100%"),
     div(),
-    flex = c(1, 10, 1),
+    textOutput("tstime"),
+    flex = c(1, 7, 1, 3),
     height = "10%"
   )
 )
@@ -31,33 +37,52 @@ server <- function(input, output, session) {
   )
   ts_decimated <- ts_data[i_decimated, ]
 
-  output$tsplot <- renderPlot({
-    date_range <- input$tsslider
+  ts_zoomed <- reactive({
+    i1 <- which.min(abs(ts_data$t - input$tsslider[1]))
+    i2 <- which.min(abs(ts_data$t - input$tsslider[2]))
+    i_zoomed <- floor(
+      seq(i1, i2, length.out = min(i2 - i1 + 1, max_res))
+    )
+    ts_data[i_zoomed, ]
+  })
 
-    i1 <- which.min(abs(ts_data$t - date_range[1]))
-    i2 <- which.min(abs(ts_data$t - date_range[2]))
+  tclick <- reactiveVal()
+  to_posixct <- function(x) as.POSIXct(x, tz = "UTC", origin = "1970-01-01")
+  observe(tclick(to_posixct(input$tsclick1$x)))
+  observe(tclick(to_posixct(input$tsclick2$x)))
 
-    i_zoomed <- floor(seq(i1, i2, length.out = min(i2 - i1 + 1, max_res)))
-    ts_zoomed <- ts_data[i_zoomed, ]
-
-    p1 <- ggplot(ts_decimated, aes(t, y)) +
+  output$ts0 <- renderPlot({
+    ggplot(ts_decimated, aes(t, y)) +
       geom_line() +
       annotate("rect",
-               xmin = ts_data$t[i1],
-               xmax = ts_data$t[i2],
+               xmin = ts_zoomed()$t[1],
+               xmax = ts_zoomed()$t[nrow(ts_zoomed())],
                ymin = -Inf,
                ymax = Inf,
                fill = "black",
                color = NA,
                alpha = 0.25) +
       theme_minimal()
-    p2 <- ggplot(ts_zoomed, aes(t, y)) +
+  })
+
+  output$ts1 <- renderPlot({
+    ggplot(ts_zoomed(), aes(t, y)) +
       geom_line() +
       theme_minimal()
-    p3 <- ggplot(ts_zoomed, aes(t, y2)) +
+  })
+
+  output$ts2 <- renderPlot({
+    ggplot(ts_zoomed(), aes(t, y2)) +
       geom_line() +
       theme_minimal()
-    p1 / p2 / p3 + plot_layout(heights = c(2, 6, 2))
+  })
+
+  output$tstime <- renderText({
+    if (!is.null(tclick())) {
+      format(tclick(), "%Y-%m-%d %H:%M:%S")
+    } else {
+      ""
+    }
   })
 }
 
