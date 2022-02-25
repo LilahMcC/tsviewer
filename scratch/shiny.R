@@ -86,14 +86,16 @@ server <- function(input, output, session) {
   output$ts1 <- renderPlot({
     ggplot(ts_zoomed(), aes(t, y)) +
       geom_line() +
-      geom_point(data = click_data(), color = "red") +
+      geom_point(data = click_data(), color = "red", size = 4) +
+      coord_cartesian(xlim = range(ts_zoomed()$t)) +
       theme_minimal()
   })
 
   output$ts2 <- renderPlot({
     ggplot(ts_zoomed(), aes(t, y2)) +
       geom_line() +
-      geom_point(data = click_data(), color = "red") +
+      geom_point(data = click_data(), color = "red", size = 4) +
+      coord_cartesian(xlim = range(ts_zoomed()$t)) +
       theme_minimal()
   })
 
