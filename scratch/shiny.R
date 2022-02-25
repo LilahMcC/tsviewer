@@ -48,8 +48,26 @@ server <- function(input, output, session) {
 
   tclick <- reactiveVal()
   to_posixct <- function(x) as.POSIXct(x, tz = "UTC", origin = "1970-01-01")
-  observe(tclick(to_posixct(input$tsclick1$x)))
-  observe(tclick(to_posixct(input$tsclick2$x)))
+  observe(if (!is.null(input$tsclick1)) {
+    tclick(to_posixct(input$tsclick1$x))
+  })
+  observe(if (!is.null(input$tsclick2)) {
+    tclick(to_posixct(input$tsclick2$x))
+  })
+  click_data <- reactiveVal(ts_data[0,])
+  observe({
+    if (length(tclick()) > 0) {
+      if (tclick() > min(ts_zoomed()$t) && tclick() < max(ts_zoomed()$t)) {
+        click_data(
+          data.frame(
+            t = tclick(),
+            y = approx(ts_zoomed()$t, ts_zoomed()$y, xout = tclick())$y,
+            y2 = approx(ts_zoomed()$t, ts_zoomed()$y2, xout = tclick())$y
+          )
+        )
+      }
+    }
+  })
 
   output$ts0 <- renderPlot({
     ggplot(ts_decimated, aes(t, y)) +
@@ -68,12 +86,14 @@ server <- function(input, output, session) {
   output$ts1 <- renderPlot({
     ggplot(ts_zoomed(), aes(t, y)) +
       geom_line() +
+      geom_point(data = click_data(), color = "red") +
       theme_minimal()
   })
 
   output$ts2 <- renderPlot({
     ggplot(ts_zoomed(), aes(t, y2)) +
       geom_line() +
+      geom_point(data = click_data(), color = "red") +
       theme_minimal()
   })
 
