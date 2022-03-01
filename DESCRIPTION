@@ -1,15 +1,25 @@
 Package: tsviewer
-Title: What the Package Does (One Line, Title Case)
+Title: Interactive time series viewer
 Version: 0.0.0.9000
 Authors@R: 
     person("Max", "Czapanskiy", , "maxczap@stanford.edu", role = c("aut", "cre"),
            comment = c("ORCID-ID" = "0000-0002-6302-905X"))
-Description: What the package does (one paragraph).
+Description: A shiny app for interacting with high-resolution time series.
+    Currently hard-coded to visualize depth and y-axis gyro for
+    ballistocardiogram data preparation.
 License: MIT + file LICENSE
+Depends: 
+    R (>= 2.10)
+Imports: 
+    catsr,
+    dplyr,
+    ggplot2,
+    magrittr,
+    shiny
+Remotes:
+    FlukeAndFeather/catsr
 Encoding: UTF-8
 Language: es
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
-Depends: 
-    R (>= 2.10)
