@@ -86,7 +86,16 @@ shiny_server <- function(ts_data) {
       )
       ts_data[i_zoomed, ]
     })
+
     i_zoom2 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
+    observe(if (!is.null(input$depth2_brush)) {
+      i <- approx(ts_data$t,
+                  seq_along(ts_data$t),
+                  xout = input$depth2_brush[c("xmin", "xmax")],
+                  method = "constant")$y
+      i_zoom2$i1 <- i[1]
+      i_zoom2$i2 <- i[2]
+    })
     data_zoomed2 <- reactive({
       i_zoomed <- floor(
         seq(i_zoom2$i1,
@@ -99,25 +108,24 @@ shiny_server <- function(ts_data) {
 
     # Time at click
     tclick <- reactiveVal()
-    observe(if (!is.null(input$tsclick1)) {
-      tclick(to_posixct(input$tsclick1$x))
-    })
-    observe(if (!is.null(input$tsclick2)) {
-      tclick(to_posixct(input$tsclick2$x))
-    })
-    click_data <- reactiveVal(ts_data[0,])
-    observe({
-      if (length(tclick()) > 0) {
-        if (tclick() > min(ts_zoomed()$t) && tclick() < max(ts_zoomed()$t)) {
-          click_data(
-            data.frame(
-              t = tclick(),
-              y = approx(ts_zoomed()$t, ts_zoomed()$y, xout = tclick())$y,
-              y2 = approx(ts_zoomed()$t, ts_zoomed()$y2, xout = tclick())$y
-            )
-          )
+    observe(
+      for (click in c("depth3_click", "speed_click", "ygyro_click")) {
+        if (!is.null(input[[click]])) {
+          tclick(to_posixct(input[[click]]$x))
         }
       }
+    )
+    click_data <- reactiveVal(ts_data[0,])
+    observe({
+      if (length(tclick()) > 0 &&
+          tclick() > min(data_zoomed2()$t) &&
+          tclick() < max(data_zoomed2()$t)) {
+            i <- approx(data_zoomed2()$t,
+                        seq_along(data_zoomed2()$t),
+                        xout = tclick(),
+                        method = "constant")$y
+            click_data(data_zoomed2()[i, ])
+          }
     })
 
     output$depth1 <- renderPlot({
@@ -152,7 +160,7 @@ shiny_server <- function(ts_data) {
     output$depth3 <- renderPlot({
       ggplot(data_zoomed2(), aes(t, depth)) +
         geom_line() +
-        # geom_point(data = click_data(), color = "red", size = 4) +
+        geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
     })
@@ -160,7 +168,7 @@ shiny_server <- function(ts_data) {
     output$speed <- renderPlot({
       ggplot(data_zoomed2(), aes(t, speed)) +
         geom_line() +
-        # geom_point(data = click_data(), color = "red", size = 4) +
+        geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
     })
@@ -168,7 +176,7 @@ shiny_server <- function(ts_data) {
     output$ygyro <- renderPlot({
       ggplot(data_zoomed2(), aes(t, ygyro)) +
         geom_line() +
-        # geom_point(data = click_data(), color = "red", size = 4) +
+        geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
     })
