@@ -6,7 +6,7 @@
 #' @importFrom magrittr %>%
 run_tsviewer <- function(prh) {
   ts_data <- prh %>%
-    dplyr::transmute(t = dt, y = -p, y2 = mw[, 2])
+    dplyr::transmute(t = dt, depth = -p, ygyro = gw[, 2], speed)
   runApp(list(
     ui = shiny_ui(ts_data),
     server = shiny_server(ts_data)
@@ -22,24 +22,27 @@ shiny_ui <- function(ts_data) {
   fillPage(
     fillRow(
       fillCol(
-        plotOutput("ts0", height = "100%", width = "100%"),
-        plotOutput("ts1", height = "100%", width = "100%", click = "tsclick1"),
-        plotOutput("ts2", height = "100%", width = "100%", click = "tsclick2"),
-        flex = c(2, 7, 3)
+        plotOutput("depth1",
+                   height = "100%", width = "100%",
+                   brush = "depth1_brush"),
+        plotOutput("depth2",
+                   height = "100%", width = "100%",
+                   brush = "depth2_brush"),
+        plotOutput("depth3",
+                   height = "100%", width = "100%",
+                   click = "depth3_click"),
+        plotOutput("speed",
+                   height = "100%", width = "100%",
+                   click = "speed_click"),
+        plotOutput("ygyro",
+                   height = "100%", width = "100%",
+                   click = "ygyro_click"),
+        flex = c(1, 1, 2, 2, 2)
       ),
       height = "90%"
     ),
     fillRow(
-      div(),
-      sliderInput("tsslider",
-                  label = NULL,
-                  min = min(ts_data$t),
-                  max = max(ts_data$t),
-                  value = range(ts_data$t),
-                  width = "100%"),
-      div(),
       textOutput("tstime"),
-      flex = c(1, 7, 1, 3),
       height = "10%"
     )
   )
@@ -47,31 +50,48 @@ shiny_ui <- function(ts_data) {
 
 #' Shiny server (internal)
 #'
-#' @param ts_data data frame with columns t, y, and y2 corresponding to the
-#'   time, depth, and y-axis gyro from a PRH file
+#' @param ts_data data frame with columns t, depth, ygyro, and speed.
 #'
 #' @return Shiny server function
 #' @import ggplot2
 #' @noRd
 shiny_server <- function(ts_data) {
   function(input, output, session) {
-    max_res <- 1e3
+    to_posixct <- function(x) as.POSIXct(x, tz = "UTC", origin = "1970-01-01")
+
+    # Decimation for overall depth profile
+    max_res <- 1e4
     i_decimated <- floor(
       seq(1, nrow(ts_data), length.out = min(nrow(ts_data), max_res))
     )
-    ts_decimated <- ts_data[i_decimated, ]
+    data_decimated <- ts_data[i_decimated, ]
 
-    ts_zoomed <- reactive({
-      i1 <- which.min(abs(ts_data$t - input$tsslider[1]))
-      i2 <- which.min(abs(ts_data$t - input$tsslider[2]))
+    # Decimation and zooming
+    i_zoom1 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
+    # observe(if (!is.null(input$depth1_brush)) {
+    #   i_zoom1$i <- which.min(abs(input$depth1_brush$x))
+    # })
+    data_zoomed1 <- reactive({
       i_zoomed <- floor(
-        seq(i1, i2, length.out = min(i2 - i1 + 1, max_res))
+        seq(i_zoom1$i1,
+            i_zoom1$i2,
+            length.out = min(i_zoom1$i2 - i_zoom1$i1 + 1, max_res))
+      )
+      ts_data[i_zoomed, ]
+    })
+    i_zoom2 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
+    data_zoomed2 <- reactive({
+      i_zoomed <- floor(
+        seq(i_zoom2$i1,
+            i_zoom2$i2,
+            length.out = min(i_zoom2$i2 - i_zoom2$i1 + 1, max_res))
       )
       ts_data[i_zoomed, ]
     })
 
+
+    # Time at click
     tclick <- reactiveVal()
-    to_posixct <- function(x) as.POSIXct(x, tz = "UTC", origin = "1970-01-01")
     observe(if (!is.null(input$tsclick1)) {
       tclick(to_posixct(input$tsclick1$x))
     })
@@ -93,12 +113,12 @@ shiny_server <- function(ts_data) {
       }
     })
 
-    output$ts0 <- renderPlot({
-      ggplot(ts_decimated, aes(t, y)) +
+    output$depth1 <- renderPlot({
+      ggplot(data_decimated, aes(t, depth)) +
         geom_line() +
         annotate("rect",
-                 xmin = ts_zoomed()$t[1],
-                 xmax = ts_zoomed()$t[nrow(ts_zoomed())],
+                 xmin = data_zoomed1()$t[1],
+                 xmax = data_zoomed1()$t[nrow(data_zoomed1())],
                  ymin = -Inf,
                  ymax = Inf,
                  fill = "black",
@@ -107,25 +127,48 @@ shiny_server <- function(ts_data) {
         theme_minimal()
     })
 
-    output$ts1 <- renderPlot({
-      ggplot(ts_zoomed(), aes(t, y)) +
+    output$depth2 <- renderPlot({
+      ggplot(data_zoomed1(), aes(t, depth)) +
         geom_line() +
-        geom_point(data = click_data(), color = "red", size = 4) +
-        coord_cartesian(xlim = range(ts_zoomed()$t)) +
+        annotate("rect",
+                 xmin = data_zoomed2()$t[1],
+                 xmax = data_zoomed2()$t[nrow(data_zoomed1())],
+                 ymin = -Inf,
+                 ymax = Inf,
+                 fill = "black",
+                 color = NA,
+                 alpha = 0.25) +
+        coord_cartesian(xlim = range(data_zoomed1()$t)) +
         theme_minimal()
     })
 
-    output$ts2 <- renderPlot({
-      ggplot(ts_zoomed(), aes(t, y2)) +
+    output$depth3 <- renderPlot({
+      ggplot(data_zoomed2(), aes(t, depth)) +
         geom_line() +
-        geom_point(data = click_data(), color = "red", size = 4) +
-        coord_cartesian(xlim = range(ts_zoomed()$t)) +
+        # geom_point(data = click_data(), color = "red", size = 4) +
+        coord_cartesian(xlim = range(data_zoomed2()$t)) +
+        theme_minimal()
+    })
+
+    output$speed <- renderPlot({
+      ggplot(data_zoomed2(), aes(t, speed)) +
+        geom_line() +
+        # geom_point(data = click_data(), color = "red", size = 4) +
+        coord_cartesian(xlim = range(data_zoomed2()$t)) +
+        theme_minimal()
+    })
+
+    output$ygyro <- renderPlot({
+      ggplot(data_zoomed2(), aes(t, ygyro)) +
+        geom_line() +
+        # geom_point(data = click_data(), color = "red", size = 4) +
+        coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
     })
 
     output$tstime <- renderText({
       if (!is.null(tclick())) {
-        format(tclick(), "%Y-%m-%d %H:%M:%S")
+        format(tclick(), "%Y-%m-%d %H:%M:%OS1")
       } else {
         ""
       }
