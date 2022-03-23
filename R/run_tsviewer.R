@@ -42,9 +42,11 @@ shiny_ui <- function(ts_data) {
       height = "90%"
     ),
     fillRow(
-      textOutput("tstime"),
+      column(width = 12, align = "center", textOutput("tstime")),
       height = "10%"
-    )
+    ),
+    tags$head(tags$style("#tstime{color: red;
+                                  font-size: 18px;}"))
   )
 }
 
