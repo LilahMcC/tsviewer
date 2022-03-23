@@ -5,8 +5,8 @@ Authors@R:
     person("Max", "Czapanskiy", , "maxczap@stanford.edu", role = c("aut", "cre"),
            comment = c("ORCID-ID" = "0000-0002-6302-905X"))
 Description: A shiny app for interacting with high-resolution time series.
-    Currently hard-coded to visualize depth and y-axis gyro for
-    ballistocardiogram data preparation.
+    Currently hard-coded to visualize a few variables for
+    ballistocardiogram data auditing.
 License: MIT + file LICENSE
 Depends: 
     R (>= 2.10)
