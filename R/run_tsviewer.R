@@ -71,9 +71,11 @@ shiny_server <- function(ts_data, ts_tz) {
     # Decimation and zooming
     i_zoom1 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
     observe(if (!is.null(input$depth1_brush)) {
+      xmin <- max(input$depth1_brush$xmin, min(ts_data$t))
+      xmax <- min(input$depth1_brush$xmax, max(ts_data$t))
       i <- approx(ts_data$t,
                   seq_along(ts_data$t),
-                  xout = input$depth1_brush[c("xmin", "xmax")],
+                  xout = c(xmin, xmax),
                   method = "constant")$y
       i_zoom1$i1 <- i[1]
       i_zoom1$i2 <- i[2]
@@ -91,9 +93,11 @@ shiny_server <- function(ts_data, ts_tz) {
 
     i_zoom2 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
     observe(if (!is.null(input$depth2_brush)) {
+      xmin <- max(input$depth2_brush$xmin, min(ts_data$t))
+      xmax <- min(input$depth2_brush$xmax, max(ts_data$t))
       i <- approx(ts_data$t,
                   seq_along(ts_data$t),
-                  xout = input$depth2_brush[c("xmin", "xmax")],
+                  xout = c(xmin, xmax),
                   method = "constant")$y
       i_zoom2$i1 <- i[1]
       i_zoom2$i2 <- i[2]
