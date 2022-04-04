@@ -9,7 +9,7 @@ run_tsviewer <- function(prh) {
     dplyr::transmute(t = dt, depth = -p, ygyro = gw[, 2], speed)
   runApp(list(
     ui = shiny_ui(ts_data),
-    server = shiny_server(ts_data)
+    server = shiny_server(ts_data, attr(prh, "tz"))
   ))
 }
 
@@ -57,9 +57,9 @@ shiny_ui <- function(ts_data) {
 #' @return Shiny server function
 #' @import ggplot2
 #' @noRd
-shiny_server <- function(ts_data) {
+shiny_server <- function(ts_data, ts_tz) {
   function(input, output, session) {
-    to_posixct <- function(x) as.POSIXct(x, tz = "UTC", origin = "1970-01-01")
+    to_posixct <- function(x) as.POSIXct(x, tz = ts_tz, origin = "1970-01-01")
 
     # Decimation for overall depth profile
     max_res <- 1e4
