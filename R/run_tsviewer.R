@@ -1,15 +1,28 @@
 #' Run the time series viewer
 #'
 #' @param prh A PRH object. See catsr::read_nc().
+#' @param resume Resume progress flag. If `TRUE`, searches for deployment
+#'   workbook in the Phase III shared Google Drive folder.
 #'
 #' @export
 #' @importFrom magrittr %>%
-run_tsviewer <- function(prh) {
+run_tsviewer <- function(prh, resume = FALSE) {
   ts_data <- prh %>%
     dplyr::transmute(t = dt, depth = -p, ygyro = gw[, 2], speed)
+  if (resume) {
+    phaseiii <- read_phaseiii(attr(prh, "whaleid"))
+    phaseiii$motionlessstart <- lubridate::force_tz(
+      phaseiii$motionlessstart,
+      attr(prh, "tz")
+    )
+    phaseiii$motionlessend <- lubridate::force_tz(
+      phaseiii$motionlessend,
+      attr(prh, "tz")
+    )
+  }
   runApp(list(
-    ui = shiny_ui(ts_data),
-    server = shiny_server(ts_data, attr(prh, "tz"))
+    ui = shiny_ui(ts_data, attr(prh, "whaleid")),
+    server = shiny_server(ts_data, attr(prh, "tz"), phaseiii)
   ))
 }
 
@@ -18,7 +31,7 @@ run_tsviewer <- function(prh) {
 #' @return Shiny UI object
 #' @import shiny
 #' @noRd
-shiny_ui <- function(ts_data) {
+shiny_ui <- function(ts_data, deployid) {
   fillPage(
     fillRow(
       fillCol(
@@ -46,7 +59,8 @@ shiny_ui <- function(ts_data) {
       height = "10%"
     ),
     tags$head(tags$style("#tstime{color: red;
-                                  font-size: 18px;}"))
+                                  font-size: 18px;}")),
+    title = deployid
   )
 }
 
@@ -57,7 +71,16 @@ shiny_ui <- function(ts_data) {
 #' @return Shiny server function
 #' @import ggplot2
 #' @noRd
-shiny_server <- function(ts_data, ts_tz) {
+shiny_server <- function(ts_data, ts_tz, phaseiii) {
+  if (is.null(phaseiii)) {
+    phaseiii <- data.frame(
+      deployid = character(),
+      motionlessid = double(),
+      motionlessstart = double(),
+      motionlessend = double(),
+      duration_s = double()
+    )
+  }
   function(input, output, session) {
     to_posixct <- function(x) as.POSIXct(x, tz = ts_tz, origin = "1970-01-01")
 
@@ -90,6 +113,17 @@ shiny_server <- function(ts_data, ts_tz) {
       )
       ts_data[i_zoomed, ]
     })
+    phaseiii_zoomed1 <- reactive({
+      phaseiii %>%
+        dplyr::filter(
+          motionlessstart < ts_data$t[i_zoom1$i2],
+          motionlessend > ts_data$t[i_zoom1$i1]
+        ) %>%
+        dplyr::mutate(
+          motionlessstart = pmax(motionlessstart, ts_data$t[i_zoom1$i1]),
+          motionlessend = pmax(motionlessend, ts_data$t[i_zoom1$i2])
+        )
+    })
 
     i_zoom2 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
     observe(if (!is.null(input$depth2_brush)) {
@@ -109,6 +143,17 @@ shiny_server <- function(ts_data, ts_tz) {
             length.out = min(i_zoom2$i2 - i_zoom2$i1 + 1, max_res))
       )
       ts_data[i_zoomed, ]
+    })
+    phaseiii_zoomed2 <- reactive({
+      phaseiii %>%
+        dplyr::filter(
+          motionlessstart < ts_data$t[i_zoom2$i2],
+          motionlessend > ts_data$t[i_zoom2$i1]
+        ) %>%
+        dplyr::mutate(
+          motionlessstart = pmax(motionlessstart, ts_data$t[i_zoom2$i1]),
+          motionlessend = pmin(motionlessend, ts_data$t[i_zoom2$i2])
+        )
     })
 
 
@@ -137,6 +182,9 @@ shiny_server <- function(ts_data, ts_tz) {
     output$depth1 <- renderPlot({
       ggplot(data_decimated, aes(t, depth)) +
         geom_line() +
+        geom_vline(aes(xintercept = motionlessstart),
+                   phaseiii,
+                   color = "red") +
         annotate("rect",
                  xmin = data_zoomed1()$t[1],
                  xmax = data_zoomed1()$t[nrow(data_zoomed1())],
@@ -151,6 +199,9 @@ shiny_server <- function(ts_data, ts_tz) {
     output$depth2 <- renderPlot({
       ggplot(data_zoomed1(), aes(t, depth)) +
         geom_line() +
+        geom_vline(aes(xintercept = motionlessstart),
+                   phaseiii_zoomed1(),
+                   color = "red") +
         annotate("rect",
                  xmin = data_zoomed2()$t[1],
                  xmax = data_zoomed2()$t[nrow(data_zoomed1())],
@@ -166,6 +217,14 @@ shiny_server <- function(ts_data, ts_tz) {
     output$depth3 <- renderPlot({
       ggplot(data_zoomed2(), aes(t, depth)) +
         geom_line() +
+        geom_rect(aes(xmin = motionlessstart,
+                      xmax = motionlessend),
+                  phaseiii_zoomed2(),
+                  inherit.aes = FALSE,
+                  ymin = -Inf,
+                  ymax = Inf,
+                  fill = "red",
+                  alpha = 0.25) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
@@ -174,6 +233,14 @@ shiny_server <- function(ts_data, ts_tz) {
     output$speed <- renderPlot({
       ggplot(data_zoomed2(), aes(t, speed)) +
         geom_line() +
+        geom_rect(aes(xmin = motionlessstart,
+                      xmax = motionlessend),
+                  phaseiii_zoomed2(),
+                  inherit.aes = FALSE,
+                  ymin = -Inf,
+                  ymax = Inf,
+                  fill = "red",
+                  alpha = 0.25) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
@@ -182,6 +249,14 @@ shiny_server <- function(ts_data, ts_tz) {
     output$ygyro <- renderPlot({
       ggplot(data_zoomed2(), aes(t, ygyro)) +
         geom_line() +
+        geom_rect(aes(xmin = motionlessstart,
+                      xmax = motionlessend),
+                  phaseiii_zoomed2(),
+                  inherit.aes = FALSE,
+                  ymin = -Inf,
+                  ymax = Inf,
+                  fill = "red",
+                  alpha = 0.25) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()

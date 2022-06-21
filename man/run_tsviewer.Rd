@@ -4,10 +4,13 @@
 \alias{run_tsviewer}
 \title{Run the time series viewer}
 \usage{
-run_tsviewer(prh)
+run_tsviewer(prh, resume = FALSE)
 }
 \arguments{
 \item{prh}{A PRH object. See catsr::read_nc().}
+
+\item{resume}{Resume progress flag. If \code{TRUE}, searches for deployment
+workbook in the Phase III shared Google Drive folder.}
 }
 \description{
 Run the time series viewer

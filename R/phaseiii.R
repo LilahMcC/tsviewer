@@ -18,7 +18,7 @@ find_phaseiii <- function(deployid) {
 
 #' Read a Phase III deployment workbook
 #'
-#' @param deployid
+#' @param deployid Deployment id e.g. "bw180905-53"
 #'
 #' @return A `tibble` with columns `deployid`, `motionlessid`,
 #' `motionlessstart`, `motionlessend`, and `duration_s`
