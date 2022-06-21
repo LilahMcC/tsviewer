@@ -10,6 +10,12 @@ run_tsviewer <- function(prh, resume = FALSE) {
   ts_data <- prh %>%
     dplyr::transmute(t = dt, depth = -p, ygyro = gw[, 2], speed)
   if (resume) {
+    if (!googlesheets4::gs4_has_token()) {
+      googledrive::drive_auth(
+        scopes = "https://www.googleapis.com/auth/drive.readonly"
+      )
+    }
+    googlesheets4::gs4_auth(token = googledrive::drive_token())
     phaseiii <- read_phaseiii(attr(prh, "whaleid"))
     phaseiii$motionlessstart <- lubridate::force_tz(
       phaseiii$motionlessstart,
@@ -18,6 +24,14 @@ run_tsviewer <- function(prh, resume = FALSE) {
     phaseiii$motionlessend <- lubridate::force_tz(
       phaseiii$motionlessend,
       attr(prh, "tz")
+    )
+  } else {
+    phaseiii <- data.frame(
+      deployid = character(),
+      motionlessid = double(),
+      motionlessstart = double(),
+      motionlessend = double(),
+      duration_s = double()
     )
   }
   runApp(list(
@@ -72,15 +86,6 @@ shiny_ui <- function(ts_data, deployid) {
 #' @import ggplot2
 #' @noRd
 shiny_server <- function(ts_data, ts_tz, phaseiii) {
-  if (is.null(phaseiii)) {
-    phaseiii <- data.frame(
-      deployid = character(),
-      motionlessid = double(),
-      motionlessstart = double(),
-      motionlessend = double(),
-      duration_s = double()
-    )
-  }
   function(input, output, session) {
     to_posixct <- function(x) as.POSIXct(x, tz = ts_tz, origin = "1970-01-01")
 
