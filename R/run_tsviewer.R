@@ -230,6 +230,13 @@ shiny_server <- function(ts_data, ts_tz, phaseiii) {
                   ymax = Inf,
                   fill = "red",
                   alpha = 0.25) +
+        geom_text(aes(x = motionlessstart + 10,
+                      label = motionlessid),
+                  phaseiii_zoomed2(),
+                  inherit.aes = FALSE,
+                  y = 1,
+                  hjust = 0,
+                  vjust = 1) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
