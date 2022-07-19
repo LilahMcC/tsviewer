@@ -26,13 +26,13 @@ You can install the development version from [GitHub](https://github.com/) with:
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("FlukeAndFeather/tsviewer")
+devtools::install_github("FlukeAndFeather/tsviewer", ref = "narwhal")
 ```
 ## Example
 
 Load narwhal data and launch the tool.
 
-```{r example, eval=FALSE}
+```r
 library(tsviewer)
 # The resulting data frame from 10hz_pitch_roll.Rmd
 narwhal_10hz <- "your code here"

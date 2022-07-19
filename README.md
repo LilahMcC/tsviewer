@@ -17,7 +17,7 @@ You can install the development version from
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("FlukeAndFeather/tsviewer")
+devtools::install_github("FlukeAndFeather/tsviewer", ref = "narwhal")
 ```
 
 ## Example
