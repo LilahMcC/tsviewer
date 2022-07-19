@@ -1,42 +1,21 @@
 #' Run the time series viewer
 #'
-#' @param prh A PRH object. See catsr::read_nc().
-#' @param resume Resume progress flag. If `TRUE`, searches for deployment
-#'   workbook in the Phase III shared Google Drive folder.
+#' @param df `[data.frame]` With depth, acceleration, and derived variables.
+#'   Must have columns: \itemize{ \item{DateTime `[POSIXct]`} \item{acc_x
+#'   `[double]`} \item{acc_y `[double]`} \item{acc_z `[double]`} \item{anorm
+#'   `[double]`} \item{pitch `[double]`} \item{roll `[double]`} \item{depth
+#'   `[double]`} }
+#' @param id `[character(1)]` Identifier for this animal.
+#' @param tz `[character(1)]` Timezone  for this animal.
 #'
 #' @export
 #' @importFrom magrittr %>%
-run_tsviewer <- function(prh, resume = FALSE) {
-  ts_data <- prh %>%
-    dplyr::transmute(t = dt, depth = -p, ygyro = gw[, 2], speed)
-  if (resume) {
-    if (!googlesheets4::gs4_has_token()) {
-      googledrive::drive_auth(
-        scopes = "https://www.googleapis.com/auth/drive.readonly"
-      )
-    }
-    googlesheets4::gs4_auth(token = googledrive::drive_token())
-    phaseiii <- read_phaseiii(attr(prh, "whaleid"))
-    phaseiii$motionlessstart <- lubridate::force_tz(
-      phaseiii$motionlessstart,
-      attr(prh, "tz")
-    )
-    phaseiii$motionlessend <- lubridate::force_tz(
-      phaseiii$motionlessend,
-      attr(prh, "tz")
-    )
-  } else {
-    phaseiii <- data.frame(
-      deployid = character(),
-      motionlessid = double(),
-      motionlessstart = double(),
-      motionlessend = double(),
-      duration_s = double()
-    )
-  }
+run_tsviewer <- function(df, id, tz) {
+  ts_data <- df %>%
+    dplyr::transmute(t = Datetime, depth = -depth, pitch, roll)
   runApp(list(
     ui = shiny_ui(ts_data, attr(prh, "whaleid")),
-    server = shiny_server(ts_data, attr(prh, "tz"), phaseiii)
+    server = shiny_server(ts_data)
   ))
 }
 
@@ -45,7 +24,7 @@ run_tsviewer <- function(prh, resume = FALSE) {
 #' @return Shiny UI object
 #' @import shiny
 #' @noRd
-shiny_ui <- function(ts_data, deployid) {
+shiny_ui <- function(ts_data, id) {
   fillPage(
     fillRow(
       fillCol(
@@ -58,12 +37,12 @@ shiny_ui <- function(ts_data, deployid) {
         plotOutput("depth3",
                    height = "100%", width = "100%",
                    click = "depth3_click"),
-        plotOutput("speed",
+        plotOutput("pitch",
                    height = "100%", width = "100%",
-                   click = "speed_click"),
-        plotOutput("ygyro",
+                   click = "pitch_click"),
+        plotOutput("roll",
                    height = "100%", width = "100%",
-                   click = "ygyro_click"),
+                   click = "roll_click"),
         flex = c(1, 1, 2, 2, 2)
       ),
       height = "90%"
@@ -74,20 +53,22 @@ shiny_ui <- function(ts_data, deployid) {
     ),
     tags$head(tags$style("#tstime{color: red;
                                   font-size: 18px;}")),
-    title = deployid
+    title = id
   )
 }
 
 #' Shiny server (internal)
 #'
-#' @param ts_data data frame with columns t, depth, ygyro, and speed.
+#' @param ts_data data frame with columns t, depth, pitch, and roll.
 #'
 #' @return Shiny server function
 #' @import ggplot2
 #' @noRd
-shiny_server <- function(ts_data, ts_tz, phaseiii) {
+shiny_server <- function(ts_data) {
   function(input, output, session) {
-    to_posixct <- function(x) as.POSIXct(x, tz = ts_tz, origin = "1970-01-01")
+    to_posixct <- function(x) {
+      as.POSIXct(x, tz = lubridate::tz(ts_data$t), origin = "1970-01-01")
+    }
 
     # Decimation for overall depth profile
     max_res <- 1e4
@@ -118,17 +99,6 @@ shiny_server <- function(ts_data, ts_tz, phaseiii) {
       )
       ts_data[i_zoomed, ]
     })
-    phaseiii_zoomed1 <- reactive({
-      phaseiii %>%
-        dplyr::filter(
-          motionlessstart < ts_data$t[i_zoom1$i2],
-          motionlessend > ts_data$t[i_zoom1$i1]
-        ) %>%
-        dplyr::mutate(
-          motionlessstart = pmax(motionlessstart, ts_data$t[i_zoom1$i1]),
-          motionlessend = pmax(motionlessend, ts_data$t[i_zoom1$i2])
-        )
-    })
 
     i_zoom2 <- reactiveValues(i1 = 1, i2 = nrow(ts_data))
     observe(if (!is.null(input$depth2_brush)) {
@@ -149,23 +119,11 @@ shiny_server <- function(ts_data, ts_tz, phaseiii) {
       )
       ts_data[i_zoomed, ]
     })
-    phaseiii_zoomed2 <- reactive({
-      phaseiii %>%
-        dplyr::filter(
-          motionlessstart < ts_data$t[i_zoom2$i2],
-          motionlessend > ts_data$t[i_zoom2$i1]
-        ) %>%
-        dplyr::mutate(
-          motionlessstart = pmax(motionlessstart, ts_data$t[i_zoom2$i1]),
-          motionlessend = pmin(motionlessend, ts_data$t[i_zoom2$i2])
-        )
-    })
-
 
     # Time at click
     tclick <- reactiveVal()
     observe(
-      for (click in c("depth3_click", "speed_click", "ygyro_click")) {
+      for (click in c("depth3_click", "pitch_click", "roll_click")) {
         if (!is.null(input[[click]])) {
           tclick(to_posixct(input[[click]]$x))
         }
@@ -187,9 +145,6 @@ shiny_server <- function(ts_data, ts_tz, phaseiii) {
     output$depth1 <- renderPlot({
       ggplot(data_decimated, aes(t, depth)) +
         geom_line() +
-        geom_vline(aes(xintercept = motionlessstart),
-                   phaseiii,
-                   color = "red") +
         annotate("rect",
                  xmin = data_zoomed1()$t[1],
                  xmax = data_zoomed1()$t[nrow(data_zoomed1())],
@@ -204,9 +159,6 @@ shiny_server <- function(ts_data, ts_tz, phaseiii) {
     output$depth2 <- renderPlot({
       ggplot(data_zoomed1(), aes(t, depth)) +
         geom_line() +
-        geom_vline(aes(xintercept = motionlessstart),
-                   phaseiii_zoomed1(),
-                   color = "red") +
         annotate("rect",
                  xmin = data_zoomed2()$t[1],
                  xmax = data_zoomed2()$t[nrow(data_zoomed1())],
@@ -222,53 +174,22 @@ shiny_server <- function(ts_data, ts_tz, phaseiii) {
     output$depth3 <- renderPlot({
       ggplot(data_zoomed2(), aes(t, depth)) +
         geom_line() +
-        geom_rect(aes(xmin = motionlessstart,
-                      xmax = motionlessend),
-                  phaseiii_zoomed2(),
-                  inherit.aes = FALSE,
-                  ymin = -Inf,
-                  ymax = Inf,
-                  fill = "red",
-                  alpha = 0.25) +
-        geom_text(aes(x = motionlessstart + 10,
-                      label = motionlessid),
-                  phaseiii_zoomed2(),
-                  inherit.aes = FALSE,
-                  y = 1,
-                  hjust = 0,
-                  vjust = 1) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
     })
 
-    output$speed <- renderPlot({
-      ggplot(data_zoomed2(), aes(t, speed)) +
+    output$pitch <- renderPlot({
+      ggplot(data_zoomed2(), aes(t, pitch)) +
         geom_line() +
-        geom_rect(aes(xmin = motionlessstart,
-                      xmax = motionlessend),
-                  phaseiii_zoomed2(),
-                  inherit.aes = FALSE,
-                  ymin = -Inf,
-                  ymax = Inf,
-                  fill = "red",
-                  alpha = 0.25) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
     })
 
-    output$ygyro <- renderPlot({
-      ggplot(data_zoomed2(), aes(t, ygyro)) +
+    output$roll <- renderPlot({
+      ggplot(data_zoomed2(), aes(t, roll)) +
         geom_line() +
-        geom_rect(aes(xmin = motionlessstart,
-                      xmax = motionlessend),
-                  phaseiii_zoomed2(),
-                  inherit.aes = FALSE,
-                  ymin = -Inf,
-                  ymax = Inf,
-                  fill = "red",
-                  alpha = 0.25) +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
         theme_minimal()
