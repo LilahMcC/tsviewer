@@ -12,9 +12,12 @@
 #' @importFrom magrittr %>%
 run_tsviewer <- function(df, id, tz) {
   ts_data <- df %>%
-    dplyr::transmute(t = Datetime, depth = -depth, pitch, roll)
+    dplyr::transmute(t = DateTime,
+                     depth = -depth,
+                     pitch = pitch/pi*180,
+                     roll = roll/pi*180)
   runApp(list(
-    ui = shiny_ui(ts_data, attr(prh, "whaleid")),
+    ui = shiny_ui(ts_data, id),
     server = shiny_server(ts_data)
   ))
 }
