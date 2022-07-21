@@ -179,7 +179,8 @@ shiny_server <- function(ts_data) {
       ggplot(data_zoomed2(), aes(t, anorm)) +
         geom_line() +
         geom_point(data = click_data(), color = "red", size = 4) +
-        coord_cartesian(xlim = range(data_zoomed2()$t), ylim = c(-2, 2)) + #setting limits on y axis seems to not be working
+        coord_cartesian(xlim = range(data_zoomed2()$t)) +
+        expand_limits(y = c(-2, 2)) + #setting limits on y axis seems to not be working
         theme_minimal()
     })
 
@@ -187,7 +188,8 @@ shiny_server <- function(ts_data) {
       ggplot(data_zoomed2(), aes(t, pitch)) +
         geom_line() +
         geom_point(data = click_data(), color = "red", size = 4) +
-        coord_cartesian(xlim = range(data_zoomed2()$t), ylim = c(-60, 60)) + # here too
+        coord_cartesian(xlim = range(data_zoomed2()$t)) +
+        expand_limits(y = c(-60, 60)) + # here too
         theme_minimal()
     })
 
