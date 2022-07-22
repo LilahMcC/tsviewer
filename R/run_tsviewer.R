@@ -180,7 +180,7 @@ shiny_server <- function(ts_data) {
         geom_line() +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
-        expand_limits(y = c(-2, 2)) + #setting limits on y axis seems to not be working
+        expand_limits(y = c(0, 2)) +
         theme_minimal()
     })
 
@@ -189,7 +189,7 @@ shiny_server <- function(ts_data) {
         geom_line() +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
-        expand_limits(y = c(-60, 60)) + # here too
+        expand_limits(y = c(-60, 60)) +
         theme_minimal()
     })
 
