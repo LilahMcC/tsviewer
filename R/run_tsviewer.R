@@ -7,10 +7,11 @@
 #'   `[double]`} }
 #' @param id `[character(1)]` Identifier for this animal.
 #' @param tz `[character(1)]` Timezone  for this animal.
+#' @param third `[character(5)]` Y axis for third panel.
 #'
 #' @export
 #' @importFrom magrittr %>%
-run_tsviewer <- function(df, id, tz) {
+run_tsviewer <- function(df, id, tz, third) {
   ts_data <- df %>%
     dplyr::transmute(t = DateTime,
                      anorm = anorm,
@@ -38,9 +39,16 @@ shiny_ui <- function(ts_data, id) {
         plotOutput("depth2",
                    height = "100%", width = "100%",
                    brush = "depth2_brush"),
-        plotOutput("anorm",
-                   height = "100%", width = "100%",
-                   click = "anorm_click"),
+        if(third == "anorm") {
+          plotOutput("anorm",
+                     height = "100%", width = "100%",
+                     click = "anorm_click")
+        }else{
+          plotOutput("depth3",
+                     height = "100%", width = "100%",
+                     click = "depth3_click")
+        }
+        ,
         plotOutput("pitch",
                    height = "100%", width = "100%",
                    click = "pitch_click"),
@@ -63,7 +71,7 @@ shiny_ui <- function(ts_data, id) {
 
 #' Shiny server (internal)
 #'
-#' @param ts_data data frame with columns t, depth, anorm, pitch, and roll.
+#' @param ts_data data frame with columns t, depth, anorm/depth, pitch, and roll.
 #'
 #' @return Shiny server function
 #' @import ggplot2
@@ -126,24 +134,35 @@ shiny_server <- function(ts_data) {
 
     # Time at click
     tclick <- reactiveVal()
-    observe(
-      for (click in c("anorm_click", "pitch_click", "roll_click")) {
-        if (!is.null(input[[click]])) {
-          tclick(to_posixct(input[[click]]$x))
+    if(third == "anorm") {
+      observe(
+        for (click in c("anorm_click", "pitch_click", "roll_click")) {
+          if (!is.null(input[[click]])) {
+            tclick(to_posixct(input[[click]]$x))
+          }
         }
-      }
-    )
+      )
+    }
+    else {
+      observe(
+        for (click in c("depth3_click", "pitch_click", "roll_click")) {
+          if (!is.null(input[[click]])) {
+            tclick(to_posixct(input[[click]]$x))
+          }
+        }
+      )
+    }
     click_data <- reactiveVal(ts_data[0,])
     observe({
       if (length(tclick()) > 0 &&
           tclick() > min(data_zoomed2()$t) &&
           tclick() < max(data_zoomed2()$t)) {
-            i <- approx(data_zoomed2()$t,
-                        seq_along(data_zoomed2()$t),
-                        xout = tclick(),
-                        method = "constant")$y
-            click_data(data_zoomed2()[i, ])
-          }
+        i <- approx(data_zoomed2()$t,
+                    seq_along(data_zoomed2()$t),
+                    xout = tclick(),
+                    method = "constant")$y
+        click_data(data_zoomed2()[i, ])
+      }
     })
 
     output$depth1 <- renderPlot({
@@ -174,16 +193,26 @@ shiny_server <- function(ts_data) {
         coord_cartesian(xlim = range(data_zoomed1()$t)) +
         theme_minimal()
     })
-
-    output$anorm <- renderPlot({
-      ggplot(data_zoomed2(), aes(t, anorm)) +
-        geom_line() +
-        geom_point(data = click_data(), color = "red", size = 4) +
-        coord_cartesian(xlim = range(data_zoomed2()$t)) +
-        expand_limits(y = c(0, 2)) +
-        theme_minimal()
-    })
-
+    if(third == "anorm"){
+      output$anorm <- renderPlot({
+        ggplot(data_zoomed2(), aes(t, anorm)) +
+          geom_line() +
+          geom_point(data = click_data(), color = "red", size = 4) +
+          coord_cartesian(xlim = range(data_zoomed2()$t)) +
+          expand_limits(y = c(.7, 1.3)) +
+          theme_minimal()
+      })
+    }
+    else{
+      output$depth3 <- renderPlot({
+        ggplot(data_zoomed2(), aes(t, depth)) +
+          geom_line() +
+          geom_point(data = click_data(), color = "red", size = 4) +
+          coord_cartesian(xlim = range(data_zoomed2()$t)) +
+          expand_limits(y = c(.7, 1.3)) +
+          theme_minimal()
+      })
+    }
     output$pitch <- renderPlot({
       ggplot(data_zoomed2(), aes(t, pitch)) +
         geom_line() +
@@ -198,6 +227,7 @@ shiny_server <- function(ts_data) {
         geom_line() +
         geom_point(data = click_data(), color = "red", size = 4) +
         coord_cartesian(xlim = range(data_zoomed2()$t)) +
+        expand_limits(y = c(-180, 180)) +
         theme_minimal()
     })
 
